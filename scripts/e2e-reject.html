@@ -1,0 +1,143 @@
+<!doctype html>
+<!--
+  商家拒单回归测试（2026-09-28 修的 bug：拒单写不进库 + 拒单后在商家端看不到）
+  用法：node scripts/e2e-smoke.mjs scripts/e2e-reject.html merchant
+
+  两种模式：
+    A) 本机有「待接单」订单 → 真实走一遍拒单（选原因 → 确认拒单），再校验两端都能看到；
+    B) 没有待接单订单 → 只校验已有「已拒单」订单能否在商家端「已完成」与顾客端「历史订单」里看到。
+-->
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>E2E 商家拒单</title></head>
+<body style="font:12px/1.5 monospace">
+<pre id="log">[start]</pre>
+<iframe id="app" src="/" style="width:420px;height:820px;border:1px solid #ccc"></iframe>
+<script>
+const out = document.getElementById('log')
+const log = (m) => { out.textContent += '\n' + m }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const app = document.getElementById('app')
+const doc = () => app.contentDocument
+const win = () => app.contentWindow
+let pass = false
+let skipped = false
+
+async function waitFor(fn, timeout = 20000, label = '') {
+  const t0 = Date.now()
+  while (Date.now() - t0 < timeout) {
+    try { const r = fn(); if (r) return r } catch (e) { /* not ready */ }
+    await sleep(200)
+  }
+  throw new Error('等待超时: ' + label)
+}
+const btn = (text) =>
+  [...doc().querySelectorAll('button,a')].find(e => e.textContent.trim().includes(text))
+function setInput(el, value) {
+  const w = win()
+  const setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set
+  setter.call(el, value)
+  el.dispatchEvent(new w.Event('input', { bubbles: true }))
+}
+function readOrders() {
+  const store = win().localStorage
+  for (let i = 0; i < store.length; i++) {
+    const k = store.key(i)
+    if (k && k.indexOf('food_delivery_orders') >= 0) {
+      try { const arr = JSON.parse(store.getItem(k)); if (Array.isArray(arr)) return arr } catch (e) { /* ignore */ }
+    }
+  }
+  return []
+}
+const flat = () => (doc().body.innerText || '').replace(/\n+/g, ' | ')
+async function login(roleLabel, phone) {
+  await waitFor(() => doc().body.innerText.includes(roleLabel), 20000, '启动页')
+  btn(roleLabel).click()
+  await waitFor(() => doc().querySelector('input[placeholder*="手机号"]'), 20000, '登录页')
+  const pwdTab = btn('密码')
+  if (pwdTab) { pwdTab.click(); await sleep(400) }
+  setInput(doc().querySelector('input[placeholder*="手机号"]'), phone)
+  setInput(doc().querySelector('input[type="password"]'), '123456')
+  const agree = btn('我已阅读并同意')
+  if (agree) { agree.click(); await sleep(300) }
+  const loginBtn = [...doc().querySelectorAll('button')].find(b => b.textContent.trim() === '登录')
+  if (!loginBtn) throw new Error('找不到登录按钮')
+  loginBtn.click()
+}
+
+;(async () => {
+  try {
+    await new Promise(r => app.addEventListener('load', r, { once: true }))
+    await login('商家端', '13800000002')
+    await waitFor(() => (win().location.hash || '').includes('/merchant'), 30000, '进入商家端')
+    log('① 商家端登录成功')
+
+    win().location.hash = '#/merchant/orders'
+    await sleep(3500)
+    const before = readOrders()
+    const pending = before.filter(o => o.status === 'pending')
+    const rejectedOrders = before.filter(o => o.status === 'rejected')
+    log('② 本机订单 ' + before.length + ' 笔：待接单 ' + pending.length + ' 笔、已拒单 ' + rejectedOrders.length + ' 笔')
+
+    if (pending.length > 0) {
+      const targetIds = pending.map(o => o.id)
+      const rejectBtn = btn('拒单')
+      if (!rejectBtn) throw new Error('订单卡片上找不到「拒单」按钮')
+      rejectBtn.click()
+      await waitFor(() => btn('确认拒单'), 8000, '拒单弹窗')
+      const chip = btn('食材不足')
+      if (chip) { chip.click(); await sleep(300) }
+      btn('确认拒单').click()
+      log('③ 已走完拒单流程（食材不足 → 确认拒单）')
+      await sleep(5000)
+      const after = readOrders()
+      const nowRejected = after.filter(o => targetIds.indexOf(o.id) >= 0 && o.status === 'rejected').length
+      log('④ 本机状态：变为已拒单 ' + nowRejected + ' 笔')
+      if (nowRejected === 0) throw new Error('拒单没有在本机生效')
+    } else if (rejectedOrders.length > 0) {
+      log('③ 没有待接单订单 → 改为校验已有「已拒单」订单能否被看到')
+    } else {
+      log('⚠ 既没有待接单、也没有已拒单订单，跳过（先去顾客端下一单再拒）')
+      skipped = true
+      throw { skip: true }
+    }
+
+    // 商家端：「已完成」标签里应该能看到「已拒单」
+    const doneTab = btn('已完成')
+    if (doneTab) {
+      doneTab.click()
+      await sleep(1800)
+      const merchantSees = flat().indexOf('已拒单') >= 0
+      log('⑤ 商家端「已完成」里出现「已拒单」：' + merchantSees)
+      log('   片段：' + flat().slice(0, 130))
+      if (!merchantSees) throw new Error('商家端看不到拒单结果（已完成标签里没有已拒单）')
+    } else {
+      throw new Error('找不到「已完成」标签')
+    }
+
+    // 顾客端：「历史订单」里应该能看到「已拒单」
+    win().location.hash = '#/'
+    await sleep(1500)
+    await login('顾客端', '13800000001')
+    await waitFor(() => (win().location.hash || '').includes('/customer'), 30000, '进入顾客端')
+    win().location.hash = '#/customer/orders'
+    await sleep(3500)
+    const tab = btn('历史订单')
+    if (tab) { tab.click(); await sleep(1500) }
+    const seen = flat().indexOf('已拒单') >= 0
+    log('⑥ 顾客端「历史订单」里出现「已拒单」：' + seen)
+    log('   片段：' + flat().slice(0, 140))
+    if (!seen) throw new Error('顾客端看不到拒单结果')
+    pass = true
+  } catch (e) {
+    if (e && e.skip) { /* 已记录 */ }
+    else {
+      log('❌ 测试异常: ' + (e && e.message ? e.message : String(e)))
+      try { log('   页面文字: ' + flat().slice(0, 200)) } catch (e2) { /* ignore */ }
+    }
+  }
+  log('SMOKE_RESULT=' + (skipped ? 'SKIP' : (pass ? 'PASS' : 'FAIL')))
+  log('[done]')
+})()
+</script>
+</body>
+</html>
