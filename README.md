@@ -21,6 +21,14 @@
 
 > 演示数据由真实操作驱动——用顾客端下一单，切到商家端**不刷新**就能看到新订单。
 
+### 三端界面
+
+<p align="center">
+  <img src="docs/screenshots/home-customer.png" alt="顾客端首页" width="228">
+  <img src="docs/screenshots/home-merchant.png" alt="商家端首页" width="228">
+  <img src="docs/screenshots/home-rider.png" alt="骑手端首页" width="228">
+</p>
+
 ---
 
 ## 功能特性
@@ -176,7 +184,7 @@ Cloudflare Pages：
 │   └── gen/              演示数据生成器与离线 SQL 校验脚本
 ├── scripts/              端到端脚本：三端冒烟 + 11 个业务场景
 ├── docs/
-│   ├── database-design.html
+│   ├── 简味点单-Supabase数据库设计稿.html
 │   └── screenshots/
 └── public/images/        11 张真实菜品 / Banner 图片
 ```

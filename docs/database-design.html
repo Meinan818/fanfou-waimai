@@ -354,11 +354,11 @@
 
   <h2>八、关键设计决策</h2>
   <div class="decide">
-    <div class="q"><b>决策 1 · 登录方式。</b>Supabase 免费版手机号短信要收费，因此真实登录用「邮箱 + 密码」，登录页保留「验证码演示入口」：输入任意手机号 + 固定演示码 123456 进入内置演示账号（纯前端演示，代码里预留了真实短信接入点）。<br><span class="rec">采用此方案。</span></div>
-    <div class="q"><b>决策 2 · 三端账号池。</b>一个账号绑定一个角色（从顾客 / 商家 / 骑手端注册即定角色），保持「三端独立、绝不串号」；想完整体验三端就注册三个账号。<br><span class="rec">采用此方案。</span></div>
-    <div class="q"><b>决策 3 · 规格 / 加料存储。</b>采用规范化子表（spec_groups / options / extras），结构清晰、RLS 随菜品走；备选是直接在 dishes 里放 jsonb（前端改动更小，但不是正经的数据库设计）。<br><span class="rec">采用规范化子表。</span></div>
-    <div class="q"><b>决策 4 · 演示店铺。</b>内置店由 seed 脚本写入数据库并标 is_demo=true，所有顾客可见、任何账号不可改；商家自建店与之并列展示（对应 getAllShops 的合并逻辑）。<br><span class="rec">采用此方案。</span></div>
-    <div class="q"><b>决策 5 · 骑手位置。</b>实时位置走 Realtime Broadcast 不落库（省存储、天然实时），订单上只保留各节点时间戳。<br><span class="rec">采用此方案。</span></div>
+    <div class="q"><b>决策 1 · 登录方式。</b>Supabase 免费版手机号短信要收费，方案是「邮箱+密码」做真实登录，登录页保留「验证码演示入口」：输入任意手机号 + 固定演示码 123456 进入内置演示账号（纯前端 Mock，文档注明预留真实短信接入点）。<br><span class="rec">采用此方案。</span></div>
+    <div class="q"><b>决策 2 · 三端账号池。</b>一个 Supabase 账号绑定一个角色（注册时从顾客/商家/骑手端进入即定角色），保持「三端独立、绝不串号」；同一个人想体验三端就注册三个邮箱（如 xxx+customer/@xxx）。<br><span class="rec">采用此方案。</span></div>
+    <div class="q"><b>决策 3 · 规格/加料存储。</b>本稿采用规范化子表（spec_groups/options/extras），结构清晰、作品集加分、RLS 随菜品走；备选是直接在 dishes 放 jsonb（前端改动更小但不像正经数据库设计）。<br><span class="rec">采用规范化子表。</span></div>
+    <div class="q"><b>决策 4 · 演示店。</b>现有 8 家内置店（饭否、川味轩…）用 seed 脚本写入数据库、标 is_demo=true，所有顾客可见、任何账号不可改；商家自建店与之并列展示（对应现有 getAllShops 合并逻辑）。<br><span class="rec">采用此方案。</span></div>
+    <div class="q"><b>决策 5 · 骑手位置。</b>实时位置走 Realtime Broadcast 不落库（省存储、天然实时），订单上只保留最终各节点时间戳。<br><span class="rec">采用此方案。</span></div>
   </div>
 
   <footer>饭否外卖 · 数据库设计稿 v0.1 · 配套迁移文件：supabase/migrations/20260915000000_init_schema.sql（该文件建 24 张表 / 56 条 RLS 策略）</footer>
